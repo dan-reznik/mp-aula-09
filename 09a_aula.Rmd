@@ -1,0 +1,199 @@
+---
+title: "MP PDT Data Science - Aula 10 - Web Scraping"
+output: html_document
+---
+
+[imdb](http://imdb.com)
+
+```{r}
+library(tidyverse)
+library(rvest)
+library(googlesheets4)
+options(httr_oob_default=T)
+```
+
+# 1. Raspagem de filme do IMBD
+
+Lê website do filme `The Lego Movie (2014)`
+
+```{r}
+scrape_imdb_lego <- read_html("http://www.imdb.com/title/tt1490017/")
+scrape_imdb_lego %>% class
+```
+
+Extrai `rating` (usar Chrome Inspector Ctrl+Shift+C para "achar" o caminho)
+
+```{r}
+scrape_imdb_lego %>% 
+  html_nodes(".ratingValue strong span") %>%
+  html_text() %>%
+  as.numeric()
+```
+
+## Lista de atores, método 1 (html "cru") 
+
+```{r}
+scrape_imdb_lego %>%
+  html_nodes("#titleCast tr") %>%
+  html_text() %>%
+  str_squish()
+```
+
+Split por "..."
+
+```{r}
+scrape_imdb_lego %>%
+  html_nodes("#titleCast tr") %>%
+  html_text() %>%
+  str_squish() %>%
+  tail(-1) %>% # pula a primeira linha
+  str_split(fixed(" ... "))
+```
+
+```{r}
+scrape_imdb_lego %>%
+  html_nodes("#titleCast tr") %>%
+  html_text() %>%
+  str_squish() %>%
+  tail(-1) %>% # pula a primeira linha
+  str_split(fixed(" ... ")) %>%
+  map_chr(first)
+```
+
+## List de atores, método 2 (usa estrutura)
+
+```{r}
+scrape_imdb_lego %>%
+  html_nodes("#titleCast .primary_photo img") %>%
+  html_attr("title")
+```
+
+## Puxa o "poster" do filme
+
+```{r}
+poster <- scrape_imdb_lego %>%
+  html_nodes(".poster img") %>%
+  html_attr("src")
+poster
+```
+
+Coloca no notebook
+
+```{r}
+knitr::include_graphics(poster)
+```
+
+## Pegar detalhes do filme
+
+```{r}
+scrape_imdb_lego_detalhes <- scrape_imdb_lego %>%
+  html_nodes("#titleDetails .txt-block") %>%
+  html_text() %>%
+  str_squish()
+scrape_imdb_lego_detalhes
+```
+ Cria tibble
+ 
+```{r}
+df_detalhes_lego <- tibble(raw=scrape_imdb_lego_detalhes) %>%
+  filter(!str_starts(raw,"Official|Show more")) %>%
+  separate(raw,into=c("chave","valor"),
+           sep=fixed(": ?"),
+           extra="merge")
+df_detalhes_lego
+```
+
+Em quais países o filme foi exibido?
+
+```{r}
+df_detalhes_lego %>%
+  filter(chave=="Country")
+```
+
+```{r}
+df_detalhes_lego %>%
+  filter(chave=="Country") %>%
+  pull(valor)
+```
+
+```{r}
+countries_lego <- df_detalhes_lego %>%
+  filter(chave=="Country") %>%
+  pull(valor) %>%
+  str_split(fixed(" | ")) %>%
+  first # str_split retorna uma "lista"
+countries_lego
+```
+
+Tipo de variavel e numero de elementos
+
+```{r}
+countries_lego %>% class
+countries_lego %>% length
+```
+
+# 2. Raspagem a partir de uma lista de filmes
+
+```{r}
+df_filmes <- read_sheet("https://docs.google.com/spreadsheets/d/1KogUb27QG4LavSTbIl3jMstOmn0-SAR_ROIYjASEtzo")
+```
+
+
+```{r}
+df_filmes_csv <- read_csv("data/filmes.csv")
+```
+
+Traz todos os htmls para a memoria como uma lista
+
+Nota: lento pois vai no site
+
+```{r}
+df_filmes_html <- df_filmes %>%
+  mutate(html=map(Site,read_html))
+df_filmes_html
+```
+
+Para cada scrape vamos reportar o rating
+
+Cria funcao para calcular rating
+
+```{r}
+extract_rating <- function(html) {
+  html %>% 
+    html_nodes(".ratingValue strong span") %>%
+    html_text() %>%
+    as.numeric()
+}
+```
+
+Adiciona uma coluna com os ratings
+
+```{r}
+df_filmes_html_ratings <- df_filmes_html %>%
+  mutate(ratings=map_dbl(html,extract_rating))
+df_filmes_html_ratings
+```
+
+Faz gráfico dos ratings 
+
+```{r}
+df_filmes_html_ratings %>%
+  ggplot(aes(x=Filme,y=ratings,fill=Filme)) +
+  geom_col() +
+  coord_flip() +
+  theme(legend.position = "none")
+```
+
+Ordena do maior para o menor
+
+```{r}
+df_filmes_html_ratings %>%
+  arrange(desc(ratings)) %>%
+  mutate(Filme=Filme%>%fct_inorder()%>%fct_rev) %>%
+  ggplot(aes(x=Filme,y=ratings,fill=Filme)) +
+  geom_col() +
+  coord_flip() +
+  theme(legend.position = "none")
+```
+
+

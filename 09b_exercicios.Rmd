@@ -1,0 +1,125 @@
+---
+title: "MP PDT Data Science - Exercicios Aula 09 - Web Scraping"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(rvest)
+library(googlesheets4)
+options(httr_oob_default=T)
+```
+
+# Exercicio 1:
+
+## 1.1 Puxar o filme "batman" (de 1989). Colocar na variável `scrape_imdb_batman`
+
+```{r}
+scrape_imdb_batman <- read_html("https://www.imdb.com/title/tt0096895")
+```
+
+## 1.2 Mostrar no seu notebook o poster deste filme.
+
+```{r}
+poster_batman <- scrape_imdb_batman %>%
+  html_nodes(".poster img") %>%
+  html_attr("src")
+knitr::include_graphics(poster_batman)
+```
+
+## 1.3 Reportar o rating deste filme
+
+```{r}
+scrape_imdb_batman %>%
+  html_nodes("span .rating") %>%
+  html_text() %>%
+  str_split(fixed("/")) %>%
+  first() %>%
+  as.numeric() %>%
+  first()
+```
+
+
+## 1.4 Reportar os seguintes vetores de caracteres:
+
+### 1.4.1 Países onde filme foi exibido 
+
+```{r}
+scrape_imdb_batman %>%
+  html_nodes("#titleDetails .txt-block") %>%
+  html_text() %>%
+  str_squish() %>%
+  tibble(raw=.) %>%
+  filter(!str_starts(raw,"Official|Show more")) %>%
+  separate(raw,into=c("chave","valor"),
+           sep=fixed(": ?"),
+           extra="merge") %>%
+  filter(chave=="Country") %>%
+  pull(valor) %>%
+  str_split(fixed(" | ")) %>%
+  first # str_split retorna uma "lista"
+```
+
+
+### 1.4.2 Línguas o filme foi exibido
+
+```{r}
+scrape_imdb_batman %>%
+  html_nodes("#titleDetails .txt-block") %>%
+  html_text() %>%
+  str_squish() %>%
+  tibble(raw=.) %>%
+  filter(!str_starts(raw,"Official|Show more")) %>%
+  separate(raw,into=c("chave","valor"),
+           sep=fixed(": ?"),
+           extra="merge") %>%
+  filter(chave=="Language") %>%
+  pull(valor) %>%
+  str_split(fixed(" | ")) %>%
+  first # str_split retorna uma "lista"
+```
+
+
+### 1.4.3 Formatos de mixagem ("Sound Mix") do filme
+
+```{r}
+scrape_imdb_batman %>%
+  html_nodes("#titleDetails .txt-block") %>%
+  html_text() %>%
+  str_squish() %>%
+  tibble(raw=.) %>%
+  filter(!str_starts(raw,"Official|Show more")) %>%
+  separate(raw,into=c("chave","valor"),
+           sep=fixed(": ?"),
+           extra="merge") %>%
+  filter(chave=="Sound Mix") %>%
+  pull(valor) %>%
+  str_split(fixed("| ")) %>%
+  first # str_split retorna uma "lista"
+```
+
+
+# Exercicio 2 (medio): Usando a lista de filmes no arquivo 
+
+```{r}
+df_filmes <- read_csv("data/filmes.csv")
+```
+
+## 2.1 Plotar em grafico de barras `Popularity` para todos os filmes do maior para o menor.
+
+```{r}
+read_html("https://www.imdb.com/title/tt0096895") %>%
+  html_nodes(".subText")
+```
+
+## 2.2 Plotar como grafico de dispercao a popularidade (eixo dos x) vs o rating (eixo dos y)
+
+## 2.3 Reportar o primeiro gênero (genre) de cada filme. qual o genero mais comum?
+
+# Exercicio 3 (avancado):
+
+## 3.1 Puxar os nomes e url dos top filmes de https://www.imdb.com/chart/top/ e salvar num .csv
+
+## 3.2 Let CSV e extrair os ratings de cada filme como coluna de um tibble
+
+## 3.3 Plotar os ratings (ggplot) em ordem descrescente, diagrama de barras horizontal
